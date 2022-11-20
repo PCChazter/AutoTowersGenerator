@@ -29,10 +29,14 @@ class RetractTowerController(QObject):
     _nominalBaseHeight = 0.8
     _nominalSectionHeight = 8.0
 
+    _originalBaseHeight = 0.8
+    _originalSectionHeight = 8.0
+
     _presetTables = {
         'Disance 1-6': {
             'filename': 'retracttower distance 1-6.stl',
             'start value': 1,
+            'end value' : 6,
             'change value': 1,
             'tower type': 'Distance',
         },
@@ -40,6 +44,7 @@ class RetractTowerController(QObject):
         'Disance 4-9': {
             'filename': 'retracttower distance 4-9.stl',
             'start value': 4,
+            'end value' : 9,
             'change value': 1,
             'tower type': 'Distance',
         },
@@ -47,6 +52,7 @@ class RetractTowerController(QObject):
         'Distance 7-12': {
             'filename': 'retracttower distance 7-12.stl',
             'start value': 7,
+            'end value' : 12,
             'change value': 1,
             'tower type': 'Distance',
         },
@@ -54,6 +60,7 @@ class RetractTowerController(QObject):
          'Speed 10-50': {
             'filename': 'retracttower speed 10-50.stl',
             'start value': 10,
+            'end value' : 50,
             'change value': 10,
             'tower type': 'Speed',
         },
@@ -61,6 +68,7 @@ class RetractTowerController(QObject):
         'Speed 35-75': {
             'filename': 'retracttower speed 35-75.stl',
             'start value': 35,
+            'end value' : 75,
             'change value': 10,
             'tower type': 'Speed',
         },
@@ -68,6 +76,7 @@ class RetractTowerController(QObject):
         'Speed 60-100': {
             'filename': 'retracttower speed 60-100.stl',
             'start value': 60,
+            'end value' : 100,
             'change value': 10,
             'tower type': 'Speed',
         },
@@ -88,6 +97,7 @@ class RetractTowerController(QObject):
         self._valueChange = 0
         self._baseLayers = 0
         self._sectionLayers = 0
+        self._scale = 100
 
 
 
@@ -129,6 +139,20 @@ class RetractTowerController(QObject):
     @pyqtProperty(str, notify=towerTypeChanged, fset=setTowerType)
     def towerType(self)->str:
         return self._towerType
+
+
+    # The scale value for the tower
+    _scaleStr = '100'
+
+    scaleStrChanged = pyqtSignal()
+
+    def setScaleStr(self, value)->None:
+        self._scaleStr = value
+        self.scaleStrChanged.emit()
+
+    @pyqtProperty(str, notify=scaleStrChanged, fset=setScaleStr)
+    def scaleStr(self)->str:
+        return self._scaleStr
 
 
 
@@ -242,6 +266,13 @@ class RetractTowerController(QObject):
             Logger.log('e', f'The "start value" for RetractTower preset table "{presetName}" has not been defined')
             return
 
+         # Load the preset's ending value
+        try:
+            endValue = presetTable['end value']
+        except KeyError:
+            Logger.log('e', f'The "end value" for RetractTower preset table "{presetName}" has not been defined')
+            return
+
         # Load the preset's value change value
         try:
             self._valueChange = presetTable['change value']
@@ -256,6 +287,15 @@ class RetractTowerController(QObject):
             Logger.log('e', f'The "tower type" for RetractTower preset table "{presetName}" has not been defined')
             return
 
+        if self._towerType == 'Distance':
+            self._towerLabelStr = 'DST'
+        elif self._towerType == 'Speed':
+            self._towerLabelStr = 'SPD'
+
+        # Undo any scaling of variables
+        self._nominalBaseHeight = self._originalBaseHeight
+        self._nominalSectionHeight = self._originalSectionHeight
+        
         # Query the current layer height
         layerHeight = Application.getInstance().getGlobalContainerStack().getProperty("layer_height", "value")
 
@@ -267,7 +307,7 @@ class RetractTowerController(QObject):
         stlFilePath = os.path.join(self._stlPath, stlFileName)
 
         # Determine the tower name
-        towerName = f'Preset Retraction Value Tower {presetName}'
+        towerName = f'Preset Retraction Value Tower {presetName} ({self._towerType} , {self._towerLabelStr}) {self._startValue}-{endValue}x{self._valueChange}'
 
         # Use the callback to load the preset STL file
         self._loadStlCallback(towerName, stlFilePath, self.postProcess)
@@ -278,11 +318,15 @@ class RetractTowerController(QObject):
     def dialogAccepted(self)->None:
         ''' This method is called by the dialog when the "Generate" button is clicked '''
         # Determine the parameters for the tower
+        scale = float(self.scaleStr)
         startValue = float(self.startValueStr)
         endValue = float(self.endValueStr)
         valueChange = float(self.valueChangeStr)
-        towerLabel = self.towerLabelStr
         towerDescription = self.towerDescriptionStr
+
+        # Scale variables
+        self._nominalBaseHeight = round((self._originalBaseHeight * scale) / 100, 1)
+        self._nominalSectionHeight = round((self._originalSectionHeight * scale) / 100, 1)
 
         # Query the current layer height
         layerHeight = Application.getInstance().getGlobalContainerStack().getProperty('layer_height', 'value')
@@ -305,6 +349,15 @@ class RetractTowerController(QObject):
         self._startValue = startValue
         self._valueChange = valueChange
 
+        # Set the right tower label
+        if self._towerType == 'Distance':
+            self._towerLabelStr = 'DST'
+        elif self._towerType == 'Speed':
+            self._towerLabelStr = 'SPD'
+
+        towerLabel = self.towerLabelStr
+        
+
         # Compile the parameters to send to OpenSCAD
         openScadParameters = {}
         openScadParameters ['Starting_Value'] = startValue
@@ -312,11 +365,20 @@ class RetractTowerController(QObject):
         openScadParameters ['Value_Change'] = valueChange
         openScadParameters ['Base_Height'] = baseHeight
         openScadParameters ['Section_Height'] = sectionHeight
-        openScadParameters ['Tower_Label'] = towerDescription
-        openScadParameters ['Column_Label'] = towerLabel
+        openScadParameters ['Section_Label_Height_Multiplier'] = 0.3
+
+        if scale < 50:
+            openScadParameters ['Tower_Label'] = ''
+            openScadParameters ['Column_Label'] = ''
+            openScadParameters ['Label_Sections'] = False
+        else:
+            openScadParameters ['Tower_Label'] = towerDescription
+            openScadParameters ['Column_Label'] = towerLabel
+
+
 
         # Determine the tower name
-        towerName = f'Auto-Generated Retraction Tower ({self._towerType}) {startValue}-{endValue}x{valueChange}'
+        towerName = f'Auto-Generated Retraction Tower ({self._towerType} , {self._towerLabelStr}) {self._startValue}-{endValue}x{self._valueChange}'
 
         # Send the filename and parameters to the model callback
         self._generateAndLoadStlCallback(towerName, self._openScadFilename, openScadParameters, self.postProcess)

@@ -580,7 +580,7 @@ class AutoTowersGenerator(QObject, Extension):
             return
 
         # Proceed if the g-code has not already been post-processed
-        if self._gcodeProcessedMarker not in gcode[0]:
+        if (self._towerControllerPostProcessingCallback != None) and (self._gcodeProcessedMarker not in gcode[0]):
 
             # Mark the g-code as having been post-processed
             gcode[0] = gcode[0] + self._gcodeProcessedMarker + '\n'

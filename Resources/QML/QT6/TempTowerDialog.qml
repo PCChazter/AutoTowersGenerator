@@ -51,6 +51,20 @@ UM.Dialog
             Layout.fillHeight: true
             Layout.alignment: Qt.AlignTop
 
+
+            UM.Label 
+            { 
+                text: "Scale" 
+            }
+            Cura.TextField
+            {
+                Layout.preferredWidth: numberInputWidth
+                validator: RegularExpressionValidator { regularExpression: /[0-9]*(\.[0-9]+)?/ }
+                text: manager.scaleStr
+                onTextChanged: if (manager.scaleStr != text) manager.scaleStr = text
+            }
+
+
             UM.Label
             {
                 text: "Starting Temperature"
