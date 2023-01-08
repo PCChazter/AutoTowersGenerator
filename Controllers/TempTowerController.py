@@ -24,6 +24,9 @@ class TempTowerController(QObject):
     _nominalBaseHeight = 0.8
     _nominalSectionHeight = 8.0
 
+    _originalBaseHeight = 0.8
+    _originalSectionHeight = 8.0
+
     _presetTables = {
         'ABA': {
             'filename': 'temptower aba.stl',
@@ -88,6 +91,7 @@ class TempTowerController(QObject):
         self._startTemperature = 0
         self._temperatureChange = 0
         self._baseLayers = 0
+        self._scale = 100
 
 
 
@@ -107,6 +111,20 @@ class TempTowerController(QObject):
             self._cachedSettingsDialog = CuraApplication.getInstance().createQmlComponent(qmlFilePath, {'manager': self})
 
         return self._cachedSettingsDialog
+
+
+    # The scale value for the tower
+    _scaleStr = '100'
+
+    scaleStrChanged = pyqtSignal()
+
+    def setScaleStr(self, value)->None:
+        self._scaleStr = value
+        self.scaleStrChanged.emit()
+
+    @pyqtProperty(str, notify=scaleStrChanged, fset=setScaleStr)
+    def scaleStr(self)->str:
+        return self._scaleStr
 
 
 
@@ -227,6 +245,10 @@ class TempTowerController(QObject):
             Logger.log('e', f'The "change value" for TempTower preset table "{presetName}" has not been defined')
             return
 
+        # Undo any scaling of variables
+        self._nominalBaseHeight = self._originalBaseHeight
+        self._nominalSectionHeight = self._originalSectionHeight
+
         # Query the current layer height
         layerHeight = Application.getInstance().getGlobalContainerStack().getProperty("layer_height", "value")
 
@@ -249,11 +271,16 @@ class TempTowerController(QObject):
     def dialogAccepted(self)->None:
         ''' This method is called by the dialog when the "Generate" button is clicked '''
         # Read the parameters directly from the dialog
+        scale = float(self.scaleStr)
         startTemperature = float(self.startTemperatureStr)
         endTemperature = float(self.endTemperatureStr)
         temperatureChange = float(self.temperatureChangeStr)
         towerLabel = self.towerLabelStr
         towerDescription = self.towerDescriptionStr
+
+        # Scale variables
+        self._nominalBaseHeight = round((self._originalBaseHeight * scale) / 100, 1)
+        self._nominalSectionHeight = round((self._originalSectionHeight * scale) / 100, 1)
 
         # Query the current layer height
         layerHeight = Application.getInstance().getGlobalContainerStack().getProperty("layer_height", "value")
